@@ -1,0 +1,2 @@
+//postgresql://neondb_owner:GXRhxQHC0Do9@ep-billowing-forest-a5kajmuc.us-east-2.aws.neon.tech/neondb?sslmode=require
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsImlhdCI6MTcyNjAxMDM3Nn0.A7_EepgHyE2tXqT4psRhoIAgmr7arVUew3-FBWuAj4Q
