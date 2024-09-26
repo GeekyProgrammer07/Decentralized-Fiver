@@ -8,6 +8,7 @@ const express_1 = __importDefault(require("express"));
 const user_1 = __importDefault(require("./routers/user"));
 const worker_1 = __importDefault(require("./routers/worker"));
 const app = (0, express_1.default)();
+app.use(express_1.default.json()); //we expect the user to send us data in the body the data isn't passed unless we use this specific middleware
 exports.JWT_SECRET = "secret";
 app.use("/v1/user", user_1.default);
 app.use("/v1/worker", worker_1.default);

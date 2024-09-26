@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
-import { JWT_SECRET } from "..";
+import { JWT_SECRET } from ".";
 
 export function authMiddleware(
   req: Request,

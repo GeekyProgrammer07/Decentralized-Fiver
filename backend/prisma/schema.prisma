@@ -21,7 +21,7 @@ model User {
 
 model Task {
   id              Int           @id @default(autoincrement())
-  title           String        @default("Select the most Clickable Thubnail")
+  title           String?        @default("Select the most Clickable Thubnail")
   options         Option[]
   user_id         Int
   signature       String
@@ -33,7 +33,6 @@ model Task {
 model Option {
   id              Int           @id @default(autoincrement())
   image_url       String
-  option_id       Int
   task_id         Int
   task            Task          @relation(fields: [task_id], references: [id])
   submissions     Submission[]

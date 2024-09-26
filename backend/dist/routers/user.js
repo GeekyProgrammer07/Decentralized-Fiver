@@ -17,8 +17,10 @@ const express_1 = require("express");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const client_s3_1 = require("@aws-sdk/client-s3");
 const __1 = require("..");
-const middleware_1 = require("./middleware");
+const middleware_1 = require("../middleware");
 const s3_presigned_post_1 = require("@aws-sdk/s3-presigned-post");
+const types_1 = require("../types");
+const DEFAULT_TITLE = "Select the most Clickable Thubnail";
 const s3Client = new client_s3_1.S3Client({
     region: "eu-north-1",
     credentials: {
@@ -28,6 +30,182 @@ const s3Client = new client_s3_1.S3Client({
 });
 const router = (0, express_1.Router)();
 const prismaClient = new client_1.PrismaClient();
+router.get("/task", middleware_1.authMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    //@ts-ignore
+    const taskId = req.query.taskId;
+    //@ts-ignore
+    const userId = req.userId;
+    try {
+        // Fetch task details based on userId and taskId
+        const taskDetails = yield prismaClient.task.findFirst({
+            where: {
+                user_id: Number(userId),
+                id: {
+                    equals: Number(taskId), // Explicitly compare the id
+                },
+            },
+            include: {
+                options: true, // Fetch options associated with the task
+            },
+        });
+        if (!taskDetails) {
+            return res.status(411).json({
+                message: "You don't have access to this task",
+            });
+        }
+        // Optimized query to count responses grouped by option_id
+        const responses = yield prismaClient.submission.groupBy({
+            by: ["option_id"],
+            where: {
+                task_id: Number(taskId),
+            },
+            _count: true, // Get count for each option_id
+        });
+        const result = {};
+        // Initialize the result object with options and image URLs
+        taskDetails.options.forEach((option) => {
+            result[option.id] = {
+                count: 0,
+                option: {
+                    imageUrl: option.image_url,
+                },
+            };
+        });
+        // Populate the count of responses for each option
+        responses.forEach((r) => {
+            result[r.option_id].count = r._count; // Assign the count to each option
+        });
+        res.json({
+            result,
+        });
+    }
+    catch (error) {
+        console.error("Error fetching task details:", error);
+        res.status(500).json({
+            message: "An error occurred while fetching the task details.",
+            error: error instanceof Error ? error.message : String(error), // Safely handle the error message
+        });
+    }
+}));
+// router.get("/task", authMiddleware, async (req, res) => {
+//   //@ts-ignore
+//   const taskId: string = req.query.taskId;
+//   //@ts-ignore
+//   const userId: string = req.userId;
+//   const taskDetails = await prismaClient.task.findFirst({
+//     where: {
+//       user_id: Number(userId),
+//       id: Number(taskId),
+//     },
+//     include: {
+//       options: true,
+//     },
+//   });
+//   if (!taskDetails) {
+//     return res.status(411).json({
+//       message: "You dont have access to this task",
+//     });
+//   }
+//   //To-do: Can you make it faster?
+//   const responses = await prismaClient.submission.findMany({
+//     where: {
+//       task_id: Number(taskId),
+//     },
+//     include: {
+//       option: true,
+//     },
+//   });
+//   const result: Record<
+//     string,
+//     {
+//       count: number;
+//       option: {
+//         imageUrl: string;
+//       };
+//     }
+//   > = {};
+//   taskDetails.options.forEach((option) => {
+//     result[option.id] = {
+//       count: 0,
+//       option: {
+//         imageUrl: option.image_url,
+//       },
+//     };
+//   });
+//   responses.forEach((r) => {
+//     result[r.option_id].count++;
+//   });
+//   res.json({
+//     result,
+//   });
+// });
+router.post("/task", middleware_1.authMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    //@ts-ignore
+    const userId = req.userId;
+    const body = req.body;
+    const parseData = types_1.createTaskInput.safeParse(body);
+    if (!parseData.success) {
+        return res.status(411).json({
+            message: "You've sent the wrong inputs",
+        });
+    }
+    // Await the transaction and ensure it returns the response object
+    const response = yield prismaClient.$transaction((tx) => __awaiter(void 0, void 0, void 0, function* () {
+        var _a;
+        const task = yield tx.task.create({
+            data: {
+                title: (_a = parseData.data.title) !== null && _a !== void 0 ? _a : DEFAULT_TITLE,
+                amount: "1",
+                signature: parseData.data.signature,
+                user_id: userId,
+            },
+        });
+        yield tx.option.createMany({
+            data: parseData.data.options.map((x) => ({
+                image_url: x.imageUrl,
+                task_id: task.id, // Ensure the correct task ID is used here
+            })),
+        });
+        return task; // Return the task object to capture its ID later
+    }));
+    // Now `response.id` should have the correct value
+    res.json({
+        id: response.id,
+    });
+}));
+// router.post("/task", authMiddleware, async (req, res) => {
+//   //@ts-ignore
+//   const userId = req.userId;
+//   //validate the inputs from the user
+//   const body = req.body;
+//   const parseData = createTaskInput.safeParse(body);
+//   if (!parseData.success) {
+//     return res.status(411).json({
+//       message: "You've sent the wrong inputs",
+//     });
+//   }
+//   //parse the signature to ensure the person has paid $50
+//   prismaClient.$transaction(async (tx) => {
+//     let response = await tx.task.create({
+//       data: {
+//         title: parseData.data.title ?? DEFAULT_TITLE,
+//         amount: "1",
+//         signature: parseData.data.signature,
+//         user_id: userId,
+//       },
+//     });
+//     await tx.option.createMany({
+//       data: parseData.data.options.map((x) => ({
+//         image_url: x.imageUrl,
+//         task_id: response.id,
+//       })),
+//     })
+//     return response;
+//   })
+//   res.json({
+//     id: response.id
+//   })
+// })
 router.get("/presignedUrl", middleware_1.authMiddleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     //@ts-ignore
     const userId = req.userId;
@@ -48,12 +226,12 @@ router.get("/presignedUrl", middleware_1.authMiddleware, (req, res) => __awaiter
         },
         Expires: 3600,
     });
-    console.log({ url, fields });
     // const preSignedUrl = await getSignedUrl(s3Client, command, {
     //   expiresIn: 3600,
     // });
     res.json({
-        preSignedUrl: url
+        preSignedUrl: url,
+        fields,
     });
 }));
 // router.get("/presignedUrl", authMiddleware, async (req, res) => {
@@ -74,7 +252,7 @@ router.get("/presignedUrl", middleware_1.authMiddleware, (req, res) => __awaiter
 //   });
 // });
 //Created a single Endpoint /signin
-//When user comes in they need to it this endpoint with a message
+//When user comes in they need to hit this endpoint with a message
 router.post("/signin", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const hardcodedWalletAddress = "G7jhzaFgfDnVRXDUnHQpZewPp5G8GKzjNmqHtVDr9vG9";
     //checks does the user exists with the above hardcoded address
